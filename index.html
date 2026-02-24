@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>TANK SIEGE</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <style>
 /* ═══════════════════════════════════════════════════════════
@@ -21,8 +24,8 @@
   --p4:#e8c870;--p5:#d44a88;--p6:#42c8c8;--p7:#ff8c42;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;user-select:none}
-#app{width:100vw;height:100vh;position:relative}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:none;}
+#app{width:100%;height:100%;position:fixed;top:0;left:0;right:0;bottom:0;}
 
 /* ── Screens ── */
 .screen{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column}
@@ -147,12 +150,152 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border2)}
 .hidden{display:none!important}
+
 /* ── Powerup notification toast ── */
 #pu-toast{position:fixed;top:50px;left:50%;transform:translateX(-50%);
   font-family:var(--mono);font-size:13px;letter-spacing:.15em;
   padding:6px 18px;border:1px solid;pointer-events:none;
   transition:opacity .3s;opacity:0;z-index:100}
 #pu-toast.show{opacity:1}
+
+/* ══════════════════════════════════════════════════
+   MOBILE STYLES
+══════════════════════════════════════════════════ */
+
+/* Landscape lock overlay */
+#rotate-overlay{
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:var(--bg);align-items:center;justify-content:center;
+  flex-direction:column;gap:20px;
+}
+#rotate-overlay.show{display:flex;}
+#rotate-overlay svg{animation:rotateSvg 2s ease-in-out infinite;}
+@keyframes rotateSvg{0%,100%{transform:rotate(0deg);}50%{transform:rotate(90deg);}}
+#rotate-overlay p{font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:var(--gold);text-align:center;}
+
+/* Mobile menu tweaks */
+@media (max-width: 700px) {
+  .title-main{font-size:clamp(44px,13vw,80px);}
+  .title-sub{font-size:9px;letter-spacing:.12em;}
+  .menu-btns{width:88vw;}
+  .btn{font-size:13px;padding:13px 18px;}
+  .panel{padding:20px 18px;max-height:92vh;}
+  .panel-title{font-size:20px;}
+  .howto-grid{grid-template-columns:1fr;}
+  .online-split{grid-template-columns:1fr;gap:16px;}
+  .online-div{display:none;}
+  .score-row{padding:8px 10px;gap:10px;}
+  .score-name{font-size:15px;}
+  .score-wins{font-size:24px;}
+  .hud{height:32px;padding:0 8px;font-size:9px;gap:8px;}
+  .hud-c{gap:8px;flex-wrap:nowrap;overflow:hidden;}
+  .hud-score{font-size:9px;}
+  #game-canvas{height:calc(100vh - 32px);}
+}
+
+/* ── Virtual controls overlay (shown only on touch devices in game) ── */
+#vcontrols{
+  display:none;
+  position:fixed;
+  bottom:0;left:0;right:0;
+  height:var(--vc-h, 200px);
+  pointer-events:none;
+  z-index:200;
+}
+#vcontrols.active{ display:block; }
+
+/* Joystick zone — left third of screen */
+#vjoy-zone{
+  position:absolute;
+  left:0;bottom:0;
+  width:50%;height:100%;
+  pointer-events:all;
+}
+#vjoy-base{
+  position:absolute;
+  width:110px;height:110px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.06);
+  border:2px solid rgba(255,255,255,0.18);
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+#vjoy-stick{
+  position:absolute;
+  width:46px;height:46px;
+  border-radius:50%;
+  background:rgba(200,168,75,0.55);
+  border:2px solid rgba(200,168,75,0.9);
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  box-shadow:0 0 12px rgba(200,168,75,0.4);
+  transition:box-shadow .1s;
+}
+
+/* Fire button — right side */
+#vfire-btn{
+  position:absolute;
+  right:28px;
+  bottom:30px;
+  width:80px;height:80px;
+  border-radius:50%;
+  background:rgba(232,84,58,0.25);
+  border:3px solid rgba(232,84,58,0.8);
+  pointer-events:all;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;font-weight:700;
+  letter-spacing:.12em;color:rgba(232,84,58,0.9);
+  box-shadow:0 0 16px rgba(232,84,58,0.3);
+  user-select:none;-webkit-user-select:none;
+  touch-action:none;
+}
+#vfire-btn:active,#vfire-btn.pressed{
+  background:rgba(232,84,58,0.6);
+  box-shadow:0 0 28px rgba(232,84,58,0.7);
+}
+
+/* Leave game button (mobile) */
+#vleave-btn{
+  position:absolute;
+  top:6px;right:8px;
+  width:36px;height:36px;
+  border-radius:50%;
+  background:rgba(9,9,15,0.7);
+  border:1px solid var(--border2);
+  pointer-events:all;
+  display:none;align-items:center;justify-content:center;
+  font-size:16px;color:var(--textd);
+  z-index:201;
+}
+@media (max-width:700px){
+  #vleave-btn{display:flex;}
+}
+
+/* Joystick direction indicators */
+#vjoy-dirs{
+  position:absolute;
+  width:110px;height:110px;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+.vjoy-arrow{
+  position:absolute;
+  width:0;height:0;
+  opacity:0.3;
+}
+
+/* Touch-friendly lobby */
+@media (max-width:700px){
+  .lobby-pl-list{max-height:140px;}
+  .btn-row{flex-wrap:wrap;gap:8px;}
+  #lobby-host-settings{flex-wrap:wrap;}
+}
+
+/* Prevent iOS bounce / context menu on canvas */
+#game-canvas{
+  touch-action:none;
+  -webkit-touch-callout:none;
+}
 </style>
 </head>
 <body>
@@ -291,7 +434,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
       </div>
     </div>
     <div class="lobby-pl-header"><span>Players</span><span id="lobby-pl-count">0/8</span></div>
-    <div class="lobby-pl-list" id="lobby-pl-list"></div>
+    <div class="lobby-pl-list" id="lobby-pl-list" style="-webkit-overflow-scrolling:touch"></div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--textd);margin:8px 0 2px" id="lobby-ping-row"></div>
     <div class="btn-row">
       <button class="btn btn-dim btn-sm" id="btn-lobby-leave">Leave</button>
@@ -331,6 +474,29 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   </div>
 </div>
 
+  <!-- ═══ VIRTUAL CONTROLS (mobile touch) ═══ -->
+  <div id="vcontrols">
+    <!-- Left: joystick -->
+    <div id="vjoy-zone">
+      <div id="vjoy-base"></div>
+      <div id="vjoy-stick"></div>
+    </div>
+    <!-- Right: fire button -->
+    <div id="vfire-btn">FIRE</div>
+  </div>
+
+  <!-- Rotate-to-landscape overlay -->
+  <div id="rotate-overlay">
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+      <rect x="8" y="16" width="32" height="22" rx="3" stroke="#c8a84b" stroke-width="2.5"/>
+      <rect x="24" y="10" width="22" height="32" rx="3" stroke="rgba(200,168,75,0.35)" stroke-width="2" stroke-dasharray="4 2"/>
+      <path d="M52 20 L58 14 L58 26 Z" fill="#c8a84b"/>
+    </svg>
+    <p>ROTATE DEVICE<br>TO LANDSCAPE</p>
+  </div>
+
+  <!-- Mobile leave button (shown during game) -->
+  <div id="vleave-btn" title="Leave game">✕</div>
 </div><!-- #app -->
 <div id="connecting-overlay" style="display:none;position:fixed;inset:0;background:rgba(9,9,15,.92);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:16px">
   <div style="font-family:'Courier New',monospace;font-size:13px;letter-spacing:.2em;color:#c8a84b" id="connecting-msg">CONNECTING...</div>
@@ -1601,6 +1767,7 @@ class LocalGame {
     this._keyBindings = keyBindings;
     this._round = 1;
     this._scores = new Map();
+    this.mobileInput = null; // set by App when touch device detected
     players.forEach(p => this._scores.set(p.id, 0));
     this._setupKeys();
   }
@@ -1654,13 +1821,22 @@ class LocalGame {
     const inputs = new Map();
     for (let i=0; i<this._players.length; i++) {
       const kb = this._keyBindings[i];
-      inputs.set(this._players[i].id, {
+      const kbInp = {
         up:    this._keys.has(kb.up),
         down:  this._keys.has(kb.down),
         left:  this._keys.has(kb.left),
         right: this._keys.has(kb.right),
         fire:  this._keys.has(kb.fire),
-      });
+      };
+      // For player 0 on touch device, merge mobile input
+      if (i === 0 && this.mobileInput) {
+        kbInp.up    = kbInp.up    || this.mobileInput.up;
+        kbInp.down  = kbInp.down  || this.mobileInput.down;
+        kbInp.left  = kbInp.left  || this.mobileInput.left;
+        kbInp.right = kbInp.right || this.mobileInput.right;
+        kbInp.fire  = kbInp.fire  || this.mobileInput.fire;
+      }
+      inputs.set(this._players[i].id, kbInp);
     }
     this._sim.tick(inputs);
   }
@@ -1814,9 +1990,13 @@ class Renderer {
     const canvas = this._canvas;
     const ctx = this._ctx;
 
-    // Fit canvas to screen
+    // Fit canvas to screen — account for virtual controls on mobile
+    const vc = document.getElementById('vcontrols');
+    const vcH = (vc && vc.classList.contains('active'))
+      ? parseFloat(getComputedStyle(vc).getPropertyValue('--vc-h')) || 0
+      : 0;
     const W = canvas.parentElement?.clientWidth || canvas.clientWidth;
-    const H = (canvas.parentElement?.clientHeight || canvas.clientHeight) - 0;
+    const H = Math.max(100, (canvas.parentElement?.clientHeight || canvas.clientHeight) - vcH);
     if (canvas.width !== W || canvas.height !== H) {
       canvas.width = W; canvas.height = H;
     }
@@ -2319,10 +2499,35 @@ const App = (() => {
     bindGameEvents();
     bindScoreEvents();
     startMenuBG();
+
+    // Mobile: leave button inside game screen
+    const lb = document.getElementById('vleave-btn');
+    if (lb) {
+      lb.addEventListener('click', () => {
+        if (confirm('Leave game?')) leaveGame();
+      });
+      lb.addEventListener('touchend', e => {
+        e.preventDefault();
+        if (confirm('Leave game?')) leaveGame();
+      });
+    }
+
+    // Mobile: disable pull-to-refresh and double-tap zoom globally
+    document.addEventListener('touchmove', e => {
+      if (Screens._active === 'game') e.preventDefault();
+    }, {passive: false});
+    document.addEventListener('gesturestart', e => e.preventDefault(), {passive:false});
+    document.addEventListener('dblclick', e => e.preventDefault());
   }
 
   // ── Menu ───────────────────────────────────────────────────
   function bindMenuEvents() {
+    // On touch devices adapt the local multiplayer button label
+    if (MobileControls.isTouch()) {
+      const bl = $('btn-local');
+      if (bl) bl.textContent = 'SOLO / LOCAL (1 JOYSTICK)';
+    }
+
     $('btn-local').onclick = () => Screens.go('local');
     $('btn-online').onclick = () => Screens.go('online');
     $('btn-howto').onclick = () => Screens.go('howto');
@@ -2359,8 +2564,12 @@ const App = (() => {
     localGame = new LocalGame(handleLocalEvent);
     localGame.init(players, bindings.map(b=>({...b})));
 
-    // Setup online-style keys (for single online player in local) — not needed here
-    setupOnlineKeys();
+    // On touch devices, enable mobile controls for player 1
+    if (MobileControls.isTouch()) {
+      MobileControls.enable((inp) => {
+        if (localGame) localGame.mobileInput = inp;
+      });
+    }
 
     localGame.startRound();
   }
@@ -2568,7 +2777,11 @@ const App = (() => {
     }
   }
 
-  // ── Online Key Input Loop ────────────────────────────────────
+  // ── Online Key + Mobile Input ───────────────────────────────────
+  // mobileInput holds the latest touch-derived input state
+  let mobileInput = {up:false,down:false,left:false,right:false,fire:false};
+  let mobileEnabled = false;
+
   function setupOnlineKeys() {
     removeOnlineKeys();
     onlineKeys = new Set();
@@ -2577,21 +2790,27 @@ const App = (() => {
     window.addEventListener('keydown', onlineKeyHandler, {passive:false});
     window.addEventListener('keyup', onlineKeyUpHandler);
 
-    // Input pump for online (host sends own input, client sends to host)
+    // Enable mobile controls if touch device
+    if (MobileControls.isTouch()) {
+      mobileEnabled = true;
+      MobileControls.enable((inp) => { mobileInput = inp; });
+    }
+
+    // Input pump at 60Hz — merges keyboard + touch
     let last = Utils.now(), accum = 0;
     function inputLoop() {
-      if (!onlineKeyHandler) return;
+      if (!onlineKeyHandler && !mobileEnabled) return;
       requestAnimationFrame(inputLoop);
       const now = Utils.now();
       accum += now - last; last = now;
       while (accum >= C.TICK_MS) {
         accum -= C.TICK_MS;
         const inp = {
-          up: onlineKeys.has(onlineBinding.up),
-          down: onlineKeys.has(onlineBinding.down),
-          left: onlineKeys.has(onlineBinding.left),
-          right: onlineKeys.has(onlineBinding.right),
-          fire: onlineKeys.has(onlineBinding.fire),
+          up:    onlineKeys.has(onlineBinding.up)    || mobileInput.up,
+          down:  onlineKeys.has(onlineBinding.down)  || mobileInput.down,
+          left:  onlineKeys.has(onlineBinding.left)  || mobileInput.left,
+          right: onlineKeys.has(onlineBinding.right) || mobileInput.right,
+          fire:  onlineKeys.has(onlineBinding.fire)  || mobileInput.fire,
         };
         if (host) host.setHostInput(inp);
         if (client) client.setInput(inp);
@@ -2604,6 +2823,8 @@ const App = (() => {
     if (onlineKeyHandler) window.removeEventListener('keydown', onlineKeyHandler);
     if (onlineKeyUpHandler) window.removeEventListener('keyup', onlineKeyUpHandler);
     onlineKeyHandler = null; onlineKeyUpHandler = null;
+    if (mobileEnabled) { MobileControls.disable(); mobileEnabled = false; }
+    mobileInput = {up:false,down:false,left:false,right:false,fire:false};
   }
 
   // ── Lobby UI ─────────────────────────────────────────────────
@@ -2772,6 +2993,8 @@ const App = (() => {
   function leaveGame() {
     renderer.stop();
     removeOnlineKeys();
+    // Disable mobile controls if local game used them directly
+    if (mode === 'local') MobileControls.disable();
     if (localGame) { localGame.destroy(); localGame = null; }
     if (host) { host.destroy(); host = null; }
     if (client) { client.destroy(); client = null; }
@@ -2799,6 +3022,284 @@ const App = (() => {
   }
 
   return { init };
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 18 — MOBILE CONTROLS
+// Virtual joystick (left thumb) + fire button (right thumb).
+// Produces the same {up,down,left,right,fire} input struct as
+// the keyboard path, so zero simulation changes needed.
+//
+// Joystick: dynamic origin (appears where thumb touches).
+// Deadzone: 12px.  Full deflection zone: 48px radius.
+// Rotation maps to left/right; forward/back maps to up/down.
+// ═══════════════════════════════════════════════════════════════
+const MobileControls = (() => {
+  const DEAD = 12;        // deadzone px
+  const MAX_R = 50;       // full-deflection radius px
+  const JOY_VISUAL_R = 55; // visual base radius px
+
+  let active = false;
+  let onInput = null; // callback(inp)
+
+  // Joystick state
+  let joyTouchId = null;
+  let joyOriginX = 0, joyOriginY = 0;
+  let joyDx = 0, joyDy = 0;
+
+  // Fire state
+  let fireTouchId = null;
+  let fireActive = false;
+
+  // DOM refs
+  const vcEl    = () => document.getElementById('vcontrols');
+  const joyZone = () => document.getElementById('vjoy-zone');
+  const joyBase = () => document.getElementById('vjoy-base');
+  const joyStick= () => document.getElementById('vjoy-stick');
+  const fireBtn = () => document.getElementById('vfire-btn');
+  const rotOv   = () => document.getElementById('rotate-overlay');
+  const leaveBtn= () => document.getElementById('vleave-btn');
+
+  function isTouchDevice() {
+    return navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+  }
+
+  function isLandscape() {
+    return window.innerWidth > window.innerHeight;
+  }
+
+  // Show/hide the rotate overlay based on orientation
+  function checkOrientation() {
+    if (!active) return;
+    const ro = rotOv();
+    if (!ro) return;
+    if (!isLandscape()) {
+      ro.classList.add('show');
+    } else {
+      ro.classList.remove('show');
+    }
+  }
+
+  // Position base visually at origin
+  function placeBase(x, y) {
+    const zone = joyZone();
+    if (!zone) return;
+    const rect = zone.getBoundingClientRect();
+    const bx = x - rect.left;
+    const by = y - rect.top;
+    const base = joyBase();
+    const stick = joyStick();
+    if (base) { base.style.left = bx+'px'; base.style.top = by+'px'; }
+    if (stick) { stick.style.left = bx+'px'; stick.style.top = by+'px'; }
+  }
+
+  // Update stick visual position
+  function placeStick(ox, oy, cx, cy) {
+    const zone = joyZone();
+    if (!zone) return;
+    const rect = zone.getBoundingClientRect();
+    let dx = cx - ox, dy = cy - oy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > JOY_VISUAL_R) {
+      dx = (dx/dist)*JOY_VISUAL_R;
+      dy = (dy/dist)*JOY_VISUAL_R;
+    }
+    const stick = joyStick();
+    if (stick) {
+      stick.style.left = (ox - rect.left + dx)+'px';
+      stick.style.top  = (oy - rect.top  + dy)+'px';
+    }
+  }
+
+  // Convert joystick dx/dy to input struct
+  function computeInput() {
+    const dist = Math.hypot(joyDx, joyDy);
+    const inp = {up:false,down:false,left:false,right:false,fire:fireActive};
+    if (dist < DEAD) return inp;
+
+    // Angle: right=0, down=PI/2
+    const angle = Math.atan2(joyDy, joyDx);
+
+    // Forward = joystick up (negative dy), Back = joystick down (positive dy)
+    // Threshold: within 120° arc of pure up/down for movement
+    const absAngle = Math.abs(angle);
+    const absDy = Math.abs(joyDy), absDx = Math.abs(joyDx);
+
+    // Use analog: if mostly vertical → move, if mostly horizontal → rotate, diagonal → both
+    const norm = dist > 0 ? dist : 1;
+    const fx = joyDx / norm; // -1..1
+    const fy = joyDy / norm;
+
+    // Deadzone for each axis separately
+    if (fy < -0.3) inp.up = true;    // stick up   → move forward
+    if (fy >  0.3) inp.down = true;  // stick down → move backward
+    if (fx < -0.35) inp.left = true;  // stick left  → rotate left
+    if (fx >  0.35) inp.right = true; // stick right → rotate right
+
+    return inp;
+  }
+
+  // Touch handlers for joystick zone
+  function onJoyStart(e) {
+    e.preventDefault();
+    const touches = e.changedTouches;
+    for (const t of touches) {
+      if (joyTouchId !== null) continue; // already tracking one
+      const zone = joyZone();
+      if (!zone) continue;
+      const rect = zone.getBoundingClientRect();
+      if (t.clientX < rect.right) {
+        joyTouchId = t.identifier;
+        joyOriginX = t.clientX;
+        joyOriginY = t.clientY;
+        joyDx = 0; joyDy = 0;
+        placeBase(t.clientX, t.clientY);
+        placeStick(t.clientX, t.clientY, t.clientX, t.clientY);
+        // Show base
+        const base = joyBase();
+        if (base) base.style.opacity = '1';
+      }
+    }
+  }
+
+  function onJoyMove(e) {
+    e.preventDefault();
+    const touches = e.changedTouches;
+    for (const t of touches) {
+      if (t.identifier !== joyTouchId) continue;
+      joyDx = t.clientX - joyOriginX;
+      joyDy = t.clientY - joyOriginY;
+      const dist = Math.hypot(joyDx, joyDy);
+      if (dist > MAX_R) {
+        joyDx = (joyDx/dist)*MAX_R;
+        joyDy = (joyDy/dist)*MAX_R;
+      }
+      placeStick(joyOriginX, joyOriginY, t.clientX, t.clientY);
+      if (onInput) onInput(computeInput());
+    }
+  }
+
+  function onJoyEnd(e) {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier !== joyTouchId) continue;
+      joyTouchId = null;
+      joyDx = 0; joyDy = 0;
+      // Hide base & center stick
+      const base = joyBase(), stick = joyStick();
+      if (base) base.style.opacity = '0';
+      if (stick && base) {
+        stick.style.left = base.style.left;
+        stick.style.top  = base.style.top;
+      }
+      if (onInput) onInput(computeInput());
+    }
+  }
+
+  // Fire button handlers — supports hold-to-autofire
+  let fireInterval = null;
+  function onFireStart(e) {
+    e.preventDefault();
+    if (fireTouchId !== null) return;
+    fireTouchId = e.changedTouches[0].identifier;
+    fireActive = true;
+    const btn = fireBtn();
+    if (btn) btn.classList.add('pressed');
+    if (onInput) onInput(computeInput());
+    // Auto-repeat fire every 100ms while held
+    fireInterval = setInterval(() => {
+      if (onInput) onInput(computeInput());
+    }, 100);
+  }
+
+  function onFireEnd(e) {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier !== fireTouchId) continue;
+      fireTouchId = null;
+      fireActive = false;
+      clearInterval(fireInterval);
+      const btn = fireBtn();
+      if (btn) btn.classList.remove('pressed');
+      if (onInput) onInput(computeInput());
+    }
+  }
+
+  function show() {
+    const vc = vcEl();
+    if (vc) {
+      // Set height based on screen
+      const h = Math.min(220, window.innerHeight * 0.32);
+      vc.style.setProperty('--vc-h', h+'px');
+      vc.classList.add('active');
+    }
+    checkOrientation();
+  }
+
+  function hide() {
+    const vc = vcEl();
+    if (vc) vc.classList.remove('active');
+    const ro = rotOv();
+    if (ro) ro.classList.remove('show');
+  }
+
+  function enable(inputCallback) {
+    if (!isTouchDevice()) return false;
+    active = true;
+    onInput = inputCallback;
+
+    const zone = joyZone();
+    if (zone) {
+      zone.addEventListener('touchstart', onJoyStart, {passive:false});
+      zone.addEventListener('touchmove',  onJoyMove,  {passive:false});
+      zone.addEventListener('touchend',   onJoyEnd,   {passive:false});
+      zone.addEventListener('touchcancel',onJoyEnd,   {passive:false});
+      // Hide base initially
+      const base = joyBase();
+      if (base) base.style.opacity = '0';
+    }
+
+    const fb = fireBtn();
+    if (fb) {
+      fb.addEventListener('touchstart', onFireStart, {passive:false});
+      fb.addEventListener('touchend',   onFireEnd,   {passive:false});
+      fb.addEventListener('touchcancel',onFireEnd,   {passive:false});
+    }
+
+    window.addEventListener('orientationchange', checkOrientation);
+    window.addEventListener('resize', checkOrientation);
+    show();
+    return true;
+  }
+
+  function disable() {
+    active = false;
+    onInput = null;
+    joyTouchId = null; fireTouchId = null;
+    joyDx = 0; joyDy = 0; fireActive = false;
+    clearInterval(fireInterval);
+
+    const zone = joyZone();
+    if (zone) {
+      zone.removeEventListener('touchstart', onJoyStart);
+      zone.removeEventListener('touchmove',  onJoyMove);
+      zone.removeEventListener('touchend',   onJoyEnd);
+      zone.removeEventListener('touchcancel',onJoyEnd);
+    }
+    const fb = fireBtn();
+    if (fb) {
+      fb.removeEventListener('touchstart', onFireStart);
+      fb.removeEventListener('touchend',   onFireEnd);
+      fb.removeEventListener('touchcancel',onFireEnd);
+    }
+    window.removeEventListener('orientationchange', checkOrientation);
+    window.removeEventListener('resize', checkOrientation);
+    hide();
+  }
+
+  function isTouch() { return isTouchDevice(); }
+
+  return { enable, disable, isTouch };
 })();
 
 // ═══════════════════════════════════════════════════════════════
