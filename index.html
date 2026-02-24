@@ -158,144 +158,272 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   transition:opacity .3s;opacity:0;z-index:100}
 #pu-toast.show{opacity:1}
 
-/* ══════════════════════════════════════════════════
-   MOBILE STYLES
-══════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   MOBILE / LANDSCAPE STYLES
+   Strategy: game canvas shrinks to leave a fixed bottom strip
+   for virtual controls. Everything positions relative to --vc-h.
+   On desktop (no touch) the strip is hidden and canvas is full.
+══════════════════════════════════════════════════════════════ */
 
-/* Landscape lock overlay */
-#rotate-overlay{
-  display:none;position:fixed;inset:0;z-index:9999;
-  background:var(--bg);align-items:center;justify-content:center;
-  flex-direction:column;gap:20px;
-}
-#rotate-overlay.show{display:flex;}
-#rotate-overlay svg{animation:rotateSvg 2s ease-in-out infinite;}
-@keyframes rotateSvg{0%,100%{transform:rotate(0deg);}50%{transform:rotate(90deg);}}
-#rotate-overlay p{font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:var(--gold);text-align:center;}
-
-/* Mobile menu tweaks */
-@media (max-width: 700px) {
-  .title-main{font-size:clamp(44px,13vw,80px);}
-  .title-sub{font-size:9px;letter-spacing:.12em;}
-  .menu-btns{width:88vw;}
-  .btn{font-size:13px;padding:13px 18px;}
-  .panel{padding:20px 18px;max-height:92vh;}
-  .panel-title{font-size:20px;}
-  .howto-grid{grid-template-columns:1fr;}
-  .online-split{grid-template-columns:1fr;gap:16px;}
-  .online-div{display:none;}
-  .score-row{padding:8px 10px;gap:10px;}
-  .score-name{font-size:15px;}
-  .score-wins{font-size:24px;}
-  .hud{height:32px;padding:0 8px;font-size:9px;gap:8px;}
-  .hud-c{gap:8px;flex-wrap:nowrap;overflow:hidden;}
-  .hud-score{font-size:9px;}
-  #game-canvas{height:calc(100vh - 32px);}
+/* CSS custom props set by JS */
+:root {
+  --vc-h: 0px;           /* height of virtual control strip */
+  --hud-h: 38px;         /* HUD bar height */
 }
 
-/* ── Virtual controls overlay (shown only on touch devices in game) ── */
-#vcontrols{
-  display:none;
-  position:fixed;
-  bottom:0;left:0;right:0;
-  height:var(--vc-h, 200px);
-  pointer-events:none;
-  z-index:200;
+/* ── Landscape lock overlay ── */
+#rotate-overlay {
+  display:none; position:fixed; inset:0; z-index:9999;
+  background:var(--bg); align-items:center; justify-content:center;
+  flex-direction:column; gap:20px;
 }
-#vcontrols.active{ display:block; }
-
-/* Joystick zone — left third of screen */
-#vjoy-zone{
-  position:absolute;
-  left:0;bottom:0;
-  width:50%;height:100%;
-  pointer-events:all;
-}
-#vjoy-base{
-  position:absolute;
-  width:110px;height:110px;
-  border-radius:50%;
-  background:rgba(255,255,255,0.06);
-  border:2px solid rgba(255,255,255,0.18);
-  transform:translate(-50%,-50%);
-  pointer-events:none;
-}
-#vjoy-stick{
-  position:absolute;
-  width:46px;height:46px;
-  border-radius:50%;
-  background:rgba(200,168,75,0.55);
-  border:2px solid rgba(200,168,75,0.9);
-  transform:translate(-50%,-50%);
-  pointer-events:none;
-  box-shadow:0 0 12px rgba(200,168,75,0.4);
-  transition:box-shadow .1s;
+#rotate-overlay.show { display:flex; }
+#rotate-overlay svg { animation:rotateSvg 2s ease-in-out infinite; }
+@keyframes rotateSvg { 0%,100%{transform:rotate(0deg)} 50%{transform:rotate(90deg)} }
+#rotate-overlay p {
+  font-family:var(--mono); font-size:12px; letter-spacing:.2em;
+  color:var(--gold); text-align:center; line-height:1.8;
 }
 
-/* Fire button — right side */
-#vfire-btn{
-  position:absolute;
-  right:28px;
-  bottom:30px;
-  width:80px;height:80px;
-  border-radius:50%;
-  background:rgba(232,84,58,0.25);
-  border:3px solid rgba(232,84,58,0.8);
-  pointer-events:all;
-  display:flex;align-items:center;justify-content:center;
-  font-family:var(--mono);font-size:11px;font-weight:700;
-  letter-spacing:.12em;color:rgba(232,84,58,0.9);
-  box-shadow:0 0 16px rgba(232,84,58,0.3);
-  user-select:none;-webkit-user-select:none;
-  touch-action:none;
-}
-#vfire-btn:active,#vfire-btn.pressed{
-  background:rgba(232,84,58,0.6);
-  box-shadow:0 0 28px rgba(232,84,58,0.7);
-}
+/* ── Game screen layout ── */
+#screen-game { background:#000; justify-content:flex-start; flex-direction:column; }
 
-/* Leave game button (mobile) */
-#vleave-btn{
-  position:absolute;
-  top:6px;right:8px;
-  width:36px;height:36px;
-  border-radius:50%;
-  background:rgba(9,9,15,0.7);
-  border:1px solid var(--border2);
-  pointer-events:all;
-  display:none;align-items:center;justify-content:center;
-  font-size:16px;color:var(--textd);
-  z-index:201;
+/* HUD — always at top, collapses on tiny screens */
+.hud {
+  width:100%; height:var(--hud-h);
+  background:rgba(9,9,15,.96); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 14px;
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  color:var(--textd); flex-shrink:0; gap:16px; z-index:10;
 }
-@media (max-width:700px){
-  #vleave-btn{display:flex;}
-}
+.hud-l{flex:1}
+.hud-c{flex:2;display:flex;justify-content:center;gap:18px;flex-wrap:wrap}
+.hud-r{flex:1;display:flex;justify-content:flex-end;gap:14px}
+.hud-score{display:flex;align-items:center;gap:5px;font-size:11px}
+.hud-dot{width:7px;height:7px;clip-path:polygon(2px 0,100% 0,calc(100% - 2px) 100%,0 100%)}
+.hud-round{color:var(--gold);font-weight:700}
 
-/* Joystick direction indicators */
-#vjoy-dirs{
-  position:absolute;
-  width:110px;height:110px;
-  transform:translate(-50%,-50%);
-  pointer-events:none;
-}
-.vjoy-arrow{
-  position:absolute;
-  width:0;height:0;
-  opacity:0.3;
-}
-
-/* Touch-friendly lobby */
-@media (max-width:700px){
-  .lobby-pl-list{max-height:140px;}
-  .btn-row{flex-wrap:wrap;gap:8px;}
-  #lobby-host-settings{flex-wrap:wrap;}
-}
-
-/* Prevent iOS bounce / context menu on canvas */
-#game-canvas{
+/* Canvas fills the space between HUD and controls strip */
+#game-canvas {
+  display:block;
+  width:100%;
+  height:calc(100vh - var(--hud-h) - var(--vc-h));
+  background:#000;
   touch-action:none;
   -webkit-touch-callout:none;
+  flex-shrink:0;
 }
+
+/* ── Virtual controls strip — bottom of screen ── */
+#vcontrols {
+  display:none;                  /* JS sets to flex when touch device */
+  position:fixed;
+  bottom:0; left:0; right:0;
+  height:var(--vc-h);
+  background:rgba(5,5,12,0.88);
+  border-top:1px solid rgba(255,255,255,0.08);
+  z-index:200;
+  /* pointer-events:none on the container; children set their own */
+  pointer-events:none;
+  align-items:center;
+  justify-content:space-between;
+  padding:0;
+  box-sizing:border-box;
+}
+#vcontrols.active { display:flex; }
+
+/* ── Joystick zone — left 45% of the strip ── */
+#vjoy-zone {
+  position:relative;
+  width:50%;
+  height:100%;
+  pointer-events:all;
+  flex-shrink:0;
+  /* subtle gradient so players know this is interactive */
+  background:radial-gradient(ellipse at 30% 60%, rgba(200,168,75,0.04), transparent 70%);
+}
+
+/* Joystick base: floats at touch origin */
+#vjoy-base {
+  position:absolute;
+  width:var(--joy-diam, 110px); height:var(--joy-diam, 110px);
+  border-radius:50%;
+  background:rgba(255,255,255,0.05);
+  border:2px solid rgba(200,168,75,0.25);
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .15s;
+  /* grid lines inside base for visual polish */
+  background-image:
+    radial-gradient(circle, rgba(200,168,75,0.08) 1px, transparent 1px),
+    radial-gradient(circle at center, transparent 30%, rgba(200,168,75,0.04) 31%, rgba(200,168,75,0.04) 32%, transparent 33%);
+  background-size:14px 14px, 100% 100%;
+}
+
+/* Joystick nub */
+#vjoy-stick {
+  position:absolute;
+  width:var(--stick-diam, 48px); height:var(--stick-diam, 48px);
+  border-radius:50%;
+  background:radial-gradient(circle at 38% 38%, rgba(255,230,160,0.9), rgba(200,168,75,0.6));
+  border:2px solid rgba(200,168,75,0.95);
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  box-shadow:0 0 14px rgba(200,168,75,0.5), inset 0 1px 3px rgba(255,255,255,0.3);
+  transition:box-shadow .1s;
+}
+#vjoy-stick.active-joy {
+  box-shadow:0 0 24px rgba(200,168,75,0.8), inset 0 1px 3px rgba(255,255,255,0.3);
+}
+
+/* Hint arrows inside the joystick zone (shown when idle) */
+#vjoy-hint {
+  position:absolute;
+  bottom:50%; left:50%;
+  transform:translate(-50%, 50%);
+  pointer-events:none;
+  opacity:0.18;
+  font-size:22px;
+  line-height:1;
+  text-align:center;
+  color:var(--gold);
+  font-family:var(--mono);
+  transition:opacity .3s;
+  white-space:pre;
+}
+#vjoy-hint.hidden-hint { opacity:0; }
+
+/* ── Right side: fire button + extra spacing ── */
+#vright-zone {
+  width:50%;
+  height:100%;
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+  background:radial-gradient(ellipse at 70% 60%, rgba(232,84,58,0.04), transparent 70%);
+}
+
+/* Fire button — large, thumb-friendly, centered in right zone */
+#vfire-btn {
+  position:relative;
+  width:var(--fire-diam, 80px); height:var(--fire-diam, 80px);
+  border-radius:50%;
+  background:radial-gradient(circle at 38% 38%, rgba(255,120,90,0.25), rgba(180,40,20,0.2));
+  border:3px solid rgba(232,84,58,0.85);
+  pointer-events:all;
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+  font-family:var(--mono); font-size:10px; font-weight:700;
+  letter-spacing:.14em; color:rgba(232,84,58,0.95);
+  box-shadow:0 0 18px rgba(232,84,58,0.35), inset 0 1px 3px rgba(255,255,255,0.1);
+  user-select:none; -webkit-user-select:none;
+  touch-action:none;
+  transition:background .08s, box-shadow .08s, transform .06s;
+}
+#vfire-btn::before {
+  content:'🔴';
+  font-size:20px;
+  line-height:1;
+  margin-bottom:2px;
+  filter:drop-shadow(0 0 6px rgba(232,84,58,0.8));
+}
+#vfire-btn.pressed {
+  background:radial-gradient(circle at 38% 38%, rgba(255,120,90,0.65), rgba(232,84,58,0.5));
+  box-shadow:0 0 32px rgba(232,84,58,0.85), inset 0 1px 3px rgba(255,255,255,0.2);
+  transform:scale(0.93);
+}
+
+/* ── Leave button — top-right corner of the vcontrols strip ── */
+#vleave-btn {
+  position:fixed;
+  top:calc(var(--hud-h) + 6px);
+  right:8px;
+  width:32px; height:32px;
+  border-radius:50%;
+  background:rgba(9,9,15,0.82);
+  border:1px solid var(--border2);
+  pointer-events:all;
+  display:none; align-items:center; justify-content:center;
+  font-size:13px; color:var(--textd);
+  z-index:300;
+  transition:border-color .15s, color .15s;
+}
+#vleave-btn:active { border-color:var(--red); color:var(--red); }
+
+/* ── Mobile-specific breakpoints ── */
+
+/* Portrait phones: show rotate overlay — handled by JS */
+
+/* Landscape phones & small tablets */
+@media (max-height:500px) and (orientation:landscape) {
+  :root { --hud-h:28px; }
+  .hud { font-size:9px; gap:8px; padding:0 8px; }
+  .hud-c { gap:8px; }
+  .hud-score { font-size:9px; }
+  #hud-fps, #hud-ping { display:none; } /* save space on small screens */
+}
+
+/* Touch device general */
+@media (hover:none) and (pointer:coarse) {
+  /* Show leave btn on touch */
+  #vleave-btn { display:flex; }
+
+  /* Compact panels for mobile */
+  .panel { padding:16px 14px; max-height:90dvh; overflow-y:auto; width:96vw; }
+  .panel-title { font-size:18px; margin-bottom:14px; }
+  .section-label { font-size:9px; }
+
+  /* Menu  */
+  .title-main { font-size:clamp(40px,14vw,80px); }
+  .title-sub  { font-size:8px; letter-spacing:.1em; }
+  .menu-btns  { width:88vw; }
+  .btn        { font-size:13px; padding:13px 18px; }
+  .menu-footer{ font-size:8px; }
+
+  /* Landscape-oriented panels: side-scroll or shrink */
+  .howto-grid { grid-template-columns:1fr; gap:12px; }
+  .online-split { grid-template-columns:1fr; gap:14px; }
+  .online-div { display:none; }
+
+  /* Lobby */
+  .lobby-pl-list  { max-height:120px; }
+  .lobby-code-val { font-size:22px; }
+  .btn-row        { flex-wrap:wrap; gap:8px; }
+  #lobby-host-settings { flex-wrap:wrap; }
+
+  /* Scoreboard */
+  .score-row  { padding:8px 10px; gap:10px; }
+  .score-name { font-size:14px; }
+  .score-wins { font-size:22px; }
+  .score-rank { font-size:20px; }
+
+  /* Local multiplayer — hide key bindings section, show mobile note */
+  .bindings-wrap { display:none; }
+  #mobile-local-note { display:block !important; }
+
+  /* Powerup toast: avoid being covered by controls */
+  #pu-toast {
+    top:calc(var(--hud-h) + 8px) !important;
+  }
+}
+
+/* Landscape-specific panel max heights */
+@media (max-height:460px) {
+  .panel { max-height:96dvh; padding:10px 12px; }
+  .panel-title { font-size:15px; padding-bottom:8px; margin-bottom:10px; }
+  .score-rank { font-size:16px; }
+  .lobby-pl-list { max-height:80px; }
+  .menu-wrap { gap:18px; }
+  .title-main { font-size:clamp(28px,10vw,56px); }
+}
+
+/* Prevent iOS bounce / context menu */
+#game-canvas { -webkit-touch-callout:none; }
+
+/* Scrollable panels on mobile */
+.panel { -webkit-overflow-scrolling:touch; }
 </style>
 </head>
 <body>
@@ -369,6 +497,11 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 <div id="screen-local" class="screen">
   <div class="panel panel-lg">
     <div class="panel-title">Local Multiplayer</div>
+    <!-- Mobile note injected here by JS on touch devices -->
+    <div id="mobile-local-note" style="display:none;font-family:var(--mono);font-size:11px;color:var(--textd);border:1px solid var(--border);padding:10px 12px;margin-bottom:14px;line-height:1.7">
+      📱 On mobile only <strong style="color:var(--gold)">1 player</strong> can play locally using the virtual joystick.<br>
+      For multiplayer, use <strong style="color:var(--gold)">Online Mode</strong> instead.
+    </div>
     <div class="player-count-row">
       <span>Players:</span>
       <div class="ctr">
@@ -474,29 +607,46 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   </div>
 </div>
 
-  <!-- ═══ VIRTUAL CONTROLS (mobile touch) ═══ -->
+  <!-- ═══ VIRTUAL CONTROLS (mobile touch only) ═══ -->
+  <!--
+    Layout: fixed strip at bottom, height set by JS via --vc-h.
+    Left 50%: joystick zone (dynamic origin).
+    Right 50%: fire button centered.
+    Canvas height = 100vh - hud - vc-h, so it never overlaps.
+  -->
   <div id="vcontrols">
-    <!-- Left: joystick -->
+    <!-- Left half: joystick -->
     <div id="vjoy-zone">
       <div id="vjoy-base"></div>
       <div id="vjoy-stick"></div>
+      <!-- Idle hint arrows (fades when joystick is in use) -->
+      <div id="vjoy-hint"> ↑
+←  →
+ ↓ </div>
     </div>
-    <!-- Right: fire button -->
-    <div id="vfire-btn">FIRE</div>
+    <!-- Right half: fire + optional auto-fire indicator -->
+    <div id="vright-zone">
+      <div id="vfire-btn">FIRE</div>
+    </div>
   </div>
 
-  <!-- Rotate-to-landscape overlay -->
+  <!-- Portrait → landscape overlay -->
   <div id="rotate-overlay">
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-      <rect x="8" y="16" width="32" height="22" rx="3" stroke="#c8a84b" stroke-width="2.5"/>
-      <rect x="24" y="10" width="22" height="32" rx="3" stroke="rgba(200,168,75,0.35)" stroke-width="2" stroke-dasharray="4 2"/>
-      <path d="M52 20 L58 14 L58 26 Z" fill="#c8a84b"/>
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+      <!-- Phone in portrait -->
+      <rect x="22" y="8" width="20" height="34" rx="4" stroke="#c8a84b" stroke-width="2.5" fill="rgba(200,168,75,0.08)"/>
+      <circle cx="32" cy="38" r="2" fill="#c8a84b" opacity=".6"/>
+      <!-- Arrow indicating rotation -->
+      <path d="M48 18 Q62 18 62 32 Q62 46 48 46" stroke="#c8a84b" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M45 42 L50 48 L56 43" stroke="#c8a84b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    <p>ROTATE DEVICE<br>TO LANDSCAPE</p>
+    <p>ROTATE DEVICE<br>TO LANDSCAPE<br><span style="color:var(--textd);font-size:10px">for the best experience</span></p>
   </div>
 
-  <!-- Mobile leave button (shown during game) -->
+  <!-- Mobile leave button — floats top-right in-game -->
   <div id="vleave-btn" title="Leave game">✕</div>
+
+
 </div><!-- #app -->
 <div id="connecting-overlay" style="display:none;position:fixed;inset:0;background:rgba(9,9,15,.92);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:16px">
   <div style="font-family:'Courier New',monospace;font-size:13px;letter-spacing:.2em;color:#c8a84b" id="connecting-msg">CONNECTING...</div>
@@ -2482,6 +2632,14 @@ const App = (() => {
     keyBindingsUI = new KeyBindingsUI('bindings-wrap');
     keyBindingsUI.setPlayerCount(2);
 
+    // ── Mobile: show note, hide key bindings and player count on touch ──
+    if (MobileControls.isTouch()) {
+      const note = $('mobile-local-note');
+      if (note) note.style.display = 'block';
+      const pcRow = document.querySelector('.player-count-row');
+      if (pcRow) pcRow.style.display = 'none';
+    }
+
     // Prevent F5/context menu during game
     window.addEventListener('keydown', e => {
       if (e.code === 'F5') e.preventDefault();
@@ -2500,16 +2658,18 @@ const App = (() => {
     bindScoreEvents();
     startMenuBG();
 
-    // Mobile: leave button inside game screen
+    // Mobile: leave button (no confirm — just double tap protection via disabled state)
     const lb = document.getElementById('vleave-btn');
     if (lb) {
-      lb.addEventListener('click', () => {
-        if (confirm('Leave game?')) leaveGame();
-      });
-      lb.addEventListener('touchend', e => {
-        e.preventDefault();
-        if (confirm('Leave game?')) leaveGame();
-      });
+      let lbTap = 0;
+      const doLeave = () => {
+        if (Screens._active !== 'game') return;
+        const now = Date.now();
+        if (now - lbTap < 800) { leaveGame(); lbTap = 0; }
+        else { lbTap = now; lb.textContent = '✕?'; setTimeout(()=>{ lb.textContent='✕'; lbTap=0; },800); }
+      };
+      lb.addEventListener('touchend', e => { e.preventDefault(); doLeave(); }, {passive:false});
+      lb.addEventListener('click', doLeave);
     }
 
     // Mobile: disable pull-to-refresh and double-tap zoom globally
@@ -3025,50 +3185,92 @@ const App = (() => {
 })();
 
 // ═══════════════════════════════════════════════════════════════
-// SECTION 18 — MOBILE CONTROLS
-// Virtual joystick (left thumb) + fire button (right thumb).
-// Produces the same {up,down,left,right,fire} input struct as
-// the keyboard path, so zero simulation changes needed.
+// SECTION 18 — MOBILE CONTROLS  (full rewrite)
 //
-// Joystick: dynamic origin (appears where thumb touches).
-// Deadzone: 12px.  Full deflection zone: 48px radius.
-// Rotation maps to left/right; forward/back maps to up/down.
+// Architecture:
+//   • #vcontrols is a flexbox strip at the bottom, height = --vc-h
+//   • #game-canvas height = 100vh - --hud-h - --vc-h  (no overlap)
+//   • Left zone (#vjoy-zone, 50%): dynamic-origin joystick
+//   • Right zone (#vright-zone, 50%): large fire button
+//   • Orientation: show rotate-overlay when portrait
+//   • Sizing: responsive to screen height — taller strip on bigger phones
+//
+// Input mapping (same struct as keyboard):
+//   Joystick Y < -deadzone  → up   (move forward)
+//   Joystick Y > +deadzone  → down (move backward)
+//   Joystick X < -deadzone  → left (rotate CCW)
+//   Joystick X > +deadzone  → right (rotate CW)
+//   Fire button held        → fire:true  (also auto-repeats)
 // ═══════════════════════════════════════════════════════════════
 const MobileControls = (() => {
-  const DEAD = 12;        // deadzone px
-  const MAX_R = 50;       // full-deflection radius px
-  const JOY_VISUAL_R = 55; // visual base radius px
+  // ── Tuning ──────────────────────────────────────────────────
+  const DEAD        = 10;   // px deadzone
+  const MAX_R       = 52;   // px full-deflection radius (input)
+  const JOY_DISP_R  = 50;   // px visual clamp for stick
+  const FIRE_AUTO_MS= 90;   // ms between auto-fire pulses when held
 
-  let active = false;
-  let onInput = null; // callback(inp)
+  // ── State ───────────────────────────────────────────────────
+  let active   = false;
+  let onInput  = null;
 
-  // Joystick state
   let joyTouchId = null;
   let joyOriginX = 0, joyOriginY = 0;
   let joyDx = 0, joyDy = 0;
 
-  // Fire state
   let fireTouchId = null;
-  let fireActive = false;
+  let fireActive  = false;
+  let fireInterval = null;
 
-  // DOM refs
-  const vcEl    = () => document.getElementById('vcontrols');
-  const joyZone = () => document.getElementById('vjoy-zone');
-  const joyBase = () => document.getElementById('vjoy-base');
-  const joyStick= () => document.getElementById('vjoy-stick');
-  const fireBtn = () => document.getElementById('vfire-btn');
-  const rotOv   = () => document.getElementById('rotate-overlay');
-  const leaveBtn= () => document.getElementById('vleave-btn');
+  // ── DOM helpers ─────────────────────────────────────────────
+  const el = id => document.getElementById(id);
+  const vcEl     = () => el('vcontrols');
+  const joyZone  = () => el('vjoy-zone');
+  const joyBase  = () => el('vjoy-base');
+  const joyStick = () => el('vjoy-stick');
+  const joyHint  = () => el('vjoy-hint');
+  const fireBtn  = () => el('vfire-btn');
+  const rotOv    = () => el('rotate-overlay');
 
+  // ── Detect ──────────────────────────────────────────────────
   function isTouchDevice() {
     return navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
   }
 
   function isLandscape() {
+    // Use screen.orientation if available (more reliable than innerWidth/Height)
+    if (screen.orientation?.type) {
+      return screen.orientation.type.includes('landscape');
+    }
     return window.innerWidth > window.innerHeight;
   }
 
-  // Show/hide the rotate overlay based on orientation
+  // ── Layout / sizing ─────────────────────────────────────────
+  // Called on show() and on resize/orientation change.
+  // Sets --vc-h on :root and --joy-diam / --fire-diam on elements.
+  function applyLayout() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+
+    // Control strip height: 28–35% of shorter dimension
+    const shortSide = Math.min(W, H);
+    const stripH = Math.round(Utils.clamp(shortSide * 0.30, 100, 180));
+
+    // Joystick and fire button diameter
+    const joyD  = Math.round(Utils.clamp(stripH * 0.85, 80, 140));
+    const stickD = Math.round(joyD * 0.42);
+    const fireD  = Math.round(Utils.clamp(stripH * 0.75, 70, 120));
+
+    // Apply to CSS custom properties
+    document.documentElement.style.setProperty('--vc-h', stripH + 'px');
+    const vc = vcEl();
+    if (vc) {
+      vc.style.setProperty('--joy-diam',   joyD   + 'px');
+      vc.style.setProperty('--stick-diam', stickD + 'px');
+      vc.style.setProperty('--fire-diam',  fireD  + 'px');
+    }
+  }
+
+  // ── Orientation check ────────────────────────────────────────
   function checkOrientation() {
     if (!active) return;
     const ro = rotOv();
@@ -3078,102 +3280,80 @@ const MobileControls = (() => {
     } else {
       ro.classList.remove('show');
     }
+    applyLayout();
   }
 
-  // Position base visually at origin
+  // ── Joystick visuals ─────────────────────────────────────────
   function placeBase(x, y) {
     const zone = joyZone();
     if (!zone) return;
     const rect = zone.getBoundingClientRect();
-    const bx = x - rect.left;
-    const by = y - rect.top;
-    const base = joyBase();
-    const stick = joyStick();
-    if (base) { base.style.left = bx+'px'; base.style.top = by+'px'; }
+    const bx = x - rect.left, by = y - rect.top;
+    const base = joyBase(), stick = joyStick();
+    if (base)  { base.style.left  = bx+'px'; base.style.top  = by+'px'; }
     if (stick) { stick.style.left = bx+'px'; stick.style.top = by+'px'; }
   }
 
-  // Update stick visual position
   function placeStick(ox, oy, cx, cy) {
     const zone = joyZone();
     if (!zone) return;
     const rect = zone.getBoundingClientRect();
     let dx = cx - ox, dy = cy - oy;
     const dist = Math.hypot(dx, dy);
-    if (dist > JOY_VISUAL_R) {
-      dx = (dx/dist)*JOY_VISUAL_R;
-      dy = (dy/dist)*JOY_VISUAL_R;
-    }
+    if (dist > JOY_DISP_R) { dx = (dx/dist)*JOY_DISP_R; dy = (dy/dist)*JOY_DISP_R; }
     const stick = joyStick();
     if (stick) {
-      stick.style.left = (ox - rect.left + dx)+'px';
-      stick.style.top  = (oy - rect.top  + dy)+'px';
+      stick.style.left = (ox - rect.left + dx) + 'px';
+      stick.style.top  = (oy - rect.top  + dy) + 'px';
     }
   }
 
-  // Convert joystick dx/dy to input struct
+  // ── Input computation ────────────────────────────────────────
   function computeInput() {
+    const inp = {up:false, down:false, left:false, right:false, fire:fireActive};
     const dist = Math.hypot(joyDx, joyDy);
-    const inp = {up:false,down:false,left:false,right:false,fire:fireActive};
     if (dist < DEAD) return inp;
-
-    // Angle: right=0, down=PI/2
-    const angle = Math.atan2(joyDy, joyDx);
-
-    // Forward = joystick up (negative dy), Back = joystick down (positive dy)
-    // Threshold: within 120° arc of pure up/down for movement
-    const absAngle = Math.abs(angle);
-    const absDy = Math.abs(joyDy), absDx = Math.abs(joyDx);
-
-    // Use analog: if mostly vertical → move, if mostly horizontal → rotate, diagonal → both
-    const norm = dist > 0 ? dist : 1;
-    const fx = joyDx / norm; // -1..1
+    const norm = dist || 1;
+    const fx = joyDx / norm;  // -1 to +1
     const fy = joyDy / norm;
-
-    // Deadzone for each axis separately
-    if (fy < -0.3) inp.up = true;    // stick up   → move forward
-    if (fy >  0.3) inp.down = true;  // stick down → move backward
-    if (fx < -0.35) inp.left = true;  // stick left  → rotate left
-    if (fx >  0.35) inp.right = true; // stick right → rotate right
-
+    // Separate axis deadzones for precise diagonal control
+    if (fy < -0.28) inp.up    = true;
+    if (fy >  0.28) inp.down  = true;
+    if (fx < -0.32) inp.left  = true;
+    if (fx >  0.32) inp.right = true;
     return inp;
   }
 
-  // Touch handlers for joystick zone
+  // ── Joystick touch handlers ──────────────────────────────────
   function onJoyStart(e) {
     e.preventDefault();
-    const touches = e.changedTouches;
-    for (const t of touches) {
-      if (joyTouchId !== null) continue; // already tracking one
+    for (const t of e.changedTouches) {
+      if (joyTouchId !== null) continue;
       const zone = joyZone();
       if (!zone) continue;
-      const rect = zone.getBoundingClientRect();
-      if (t.clientX < rect.right) {
-        joyTouchId = t.identifier;
-        joyOriginX = t.clientX;
-        joyOriginY = t.clientY;
-        joyDx = 0; joyDy = 0;
-        placeBase(t.clientX, t.clientY);
-        placeStick(t.clientX, t.clientY, t.clientX, t.clientY);
-        // Show base
-        const base = joyBase();
-        if (base) base.style.opacity = '1';
-      }
+      joyTouchId = t.identifier;
+      joyOriginX = t.clientX;
+      joyOriginY = t.clientY;
+      joyDx = 0; joyDy = 0;
+      placeBase(t.clientX, t.clientY);
+      placeStick(t.clientX, t.clientY, t.clientX, t.clientY);
+      // Show base, hide hint
+      const base = joyBase(), hint = joyHint(), stick = joyStick();
+      if (base)  base.style.opacity = '1';
+      if (hint)  hint.classList.add('hidden-hint');
+      if (stick) stick.classList.add('active-joy');
+      if (onInput) onInput(computeInput());
     }
   }
 
   function onJoyMove(e) {
     e.preventDefault();
-    const touches = e.changedTouches;
-    for (const t of touches) {
+    for (const t of e.changedTouches) {
       if (t.identifier !== joyTouchId) continue;
       joyDx = t.clientX - joyOriginX;
       joyDy = t.clientY - joyOriginY;
       const dist = Math.hypot(joyDx, joyDy);
-      if (dist > MAX_R) {
-        joyDx = (joyDx/dist)*MAX_R;
-        joyDy = (joyDy/dist)*MAX_R;
-      }
+      if (dist > MAX_R) { joyDx=(joyDx/dist)*MAX_R; joyDy=(joyDy/dist)*MAX_R; }
       placeStick(joyOriginX, joyOriginY, t.clientX, t.clientY);
       if (onInput) onInput(computeInput());
     }
@@ -3185,19 +3365,16 @@ const MobileControls = (() => {
       if (t.identifier !== joyTouchId) continue;
       joyTouchId = null;
       joyDx = 0; joyDy = 0;
-      // Hide base & center stick
-      const base = joyBase(), stick = joyStick();
-      if (base) base.style.opacity = '0';
-      if (stick && base) {
-        stick.style.left = base.style.left;
-        stick.style.top  = base.style.top;
-      }
+      const base = joyBase(), stick = joyStick(), hint = joyHint();
+      if (base)  base.style.opacity = '0';
+      if (hint)  hint.classList.remove('hidden-hint');
+      if (stick) { stick.classList.remove('active-joy');
+                   if (base) { stick.style.left=base.style.left; stick.style.top=base.style.top; } }
       if (onInput) onInput(computeInput());
     }
   }
 
-  // Fire button handlers — supports hold-to-autofire
-  let fireInterval = null;
+  // ── Fire touch handlers ──────────────────────────────────────
   function onFireStart(e) {
     e.preventDefault();
     if (fireTouchId !== null) return;
@@ -3206,10 +3383,8 @@ const MobileControls = (() => {
     const btn = fireBtn();
     if (btn) btn.classList.add('pressed');
     if (onInput) onInput(computeInput());
-    // Auto-repeat fire every 100ms while held
-    fireInterval = setInterval(() => {
-      if (onInput) onInput(computeInput());
-    }, 100);
+    // Hold-to-autofire
+    fireInterval = setInterval(() => { if (onInput) onInput(computeInput()); }, FIRE_AUTO_MS);
   }
 
   function onFireEnd(e) {
@@ -3218,31 +3393,40 @@ const MobileControls = (() => {
       if (t.identifier !== fireTouchId) continue;
       fireTouchId = null;
       fireActive = false;
-      clearInterval(fireInterval);
+      clearInterval(fireInterval); fireInterval = null;
       const btn = fireBtn();
       if (btn) btn.classList.remove('pressed');
       if (onInput) onInput(computeInput());
     }
   }
 
+  // ── Show / hide ──────────────────────────────────────────────
   function show() {
+    applyLayout();
     const vc = vcEl();
-    if (vc) {
-      // Set height based on screen
-      const h = Math.min(220, window.innerHeight * 0.32);
-      vc.style.setProperty('--vc-h', h+'px');
-      vc.classList.add('active');
+    if (vc) vc.classList.add('active');
+    // Reset joystick to center of zone for initial visual
+    const zone = joyZone();
+    if (zone) {
+      const r = zone.getBoundingClientRect();
+      const cx = r.left + r.width  * 0.35;
+      const cy = r.top  + r.height * 0.55;
+      placeBase(cx, cy);
     }
+    const base = joyBase();
+    if (base) base.style.opacity = '0'; // hidden until first touch
     checkOrientation();
   }
 
   function hide() {
+    document.documentElement.style.setProperty('--vc-h', '0px');
     const vc = vcEl();
     if (vc) vc.classList.remove('active');
     const ro = rotOv();
     if (ro) ro.classList.remove('show');
   }
 
+  // ── Enable / disable ─────────────────────────────────────────
   function enable(inputCallback) {
     if (!isTouchDevice()) return false;
     active = true;
@@ -3250,47 +3434,46 @@ const MobileControls = (() => {
 
     const zone = joyZone();
     if (zone) {
-      zone.addEventListener('touchstart', onJoyStart, {passive:false});
-      zone.addEventListener('touchmove',  onJoyMove,  {passive:false});
-      zone.addEventListener('touchend',   onJoyEnd,   {passive:false});
-      zone.addEventListener('touchcancel',onJoyEnd,   {passive:false});
-      // Hide base initially
-      const base = joyBase();
-      if (base) base.style.opacity = '0';
+      zone.addEventListener('touchstart',  onJoyStart, {passive:false});
+      zone.addEventListener('touchmove',   onJoyMove,  {passive:false});
+      zone.addEventListener('touchend',    onJoyEnd,   {passive:false});
+      zone.addEventListener('touchcancel', onJoyEnd,   {passive:false});
     }
 
+    // Wire fire button — also accept touches that start elsewhere and
+    // slide into the right zone (handled by touchmove on document)
     const fb = fireBtn();
     if (fb) {
-      fb.addEventListener('touchstart', onFireStart, {passive:false});
-      fb.addEventListener('touchend',   onFireEnd,   {passive:false});
-      fb.addEventListener('touchcancel',onFireEnd,   {passive:false});
+      fb.addEventListener('touchstart',  onFireStart, {passive:false});
+      fb.addEventListener('touchend',    onFireEnd,   {passive:false});
+      fb.addEventListener('touchcancel', onFireEnd,   {passive:false});
     }
 
-    window.addEventListener('orientationchange', checkOrientation);
+    window.addEventListener('orientationchange', () => setTimeout(checkOrientation, 150));
     window.addEventListener('resize', checkOrientation);
     show();
     return true;
   }
 
   function disable() {
-    active = false;
+    active  = false;
     onInput = null;
     joyTouchId = null; fireTouchId = null;
     joyDx = 0; joyDy = 0; fireActive = false;
-    clearInterval(fireInterval);
+    clearInterval(fireInterval); fireInterval = null;
 
     const zone = joyZone();
     if (zone) {
-      zone.removeEventListener('touchstart', onJoyStart);
-      zone.removeEventListener('touchmove',  onJoyMove);
-      zone.removeEventListener('touchend',   onJoyEnd);
-      zone.removeEventListener('touchcancel',onJoyEnd);
+      zone.removeEventListener('touchstart',  onJoyStart);
+      zone.removeEventListener('touchmove',   onJoyMove);
+      zone.removeEventListener('touchend',    onJoyEnd);
+      zone.removeEventListener('touchcancel', onJoyEnd);
     }
     const fb = fireBtn();
     if (fb) {
-      fb.removeEventListener('touchstart', onFireStart);
-      fb.removeEventListener('touchend',   onFireEnd);
-      fb.removeEventListener('touchcancel',onFireEnd);
+      fb.removeEventListener('touchstart',  onFireStart);
+      fb.removeEventListener('touchend',    onFireEnd);
+      fb.removeEventListener('touchcancel', onFireEnd);
     }
     window.removeEventListener('orientationchange', checkOrientation);
     window.removeEventListener('resize', checkOrientation);
@@ -3299,7 +3482,7 @@ const MobileControls = (() => {
 
   function isTouch() { return isTouchDevice(); }
 
-  return { enable, disable, isTouch };
+  return { enable, disable, isTouch, applyLayout };
 })();
 
 // ═══════════════════════════════════════════════════════════════
