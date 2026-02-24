@@ -147,6 +147,12 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border2)}
 .hidden{display:none!important}
+/* ── Powerup notification toast ── */
+#pu-toast{position:fixed;top:50px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:13px;letter-spacing:.15em;
+  padding:6px 18px;border:1px solid;pointer-events:none;
+  transition:opacity .3s;opacity:0;z-index:100}
+#pu-toast.show{opacity:1}
 </style>
 </head>
 <body>
@@ -189,8 +195,21 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
       </div>
       <div class="howto-sec">
         <h4>Maze</h4>
-        <p>Each round generates a new maze using seeded DFS. All players use the same seed for identical layouts. Maze is always fully connected — no dead-end chambers.</p>
+        <p>Each round generates a new open-layout map: DFS skeleton plus aggressive wall removal creates wide corridors, open plazas, and looping paths. Much more open than a pure maze.</p>
       </div>
+    </div>
+    <div class="section-label" style="margin-bottom:10px;margin-top:4px">Powerups (spawn every 8s, last 8s)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:20px;font-family:var(--mono);font-size:11px">
+      <div><span style="color:#ff6b35;font-weight:bold">⚡ TRIPLE</span> — 3-way bullet spread</div>
+      <div><span style="color:#42c8ff;font-weight:bold">▶▶ SPEED</span> — 2× movement speed</div>
+      <div><span style="color:#ff3366;font-weight:bold">🔥 RAPID</span> — 3× fire rate</div>
+      <div><span style="color:#42c87a;font-weight:bold">🛡 SHIELD</span> — absorb one bullet hit</div>
+      <div><span style="color:#e84393;font-weight:bold">💥 HEAVY</span> — giant instant-kill bullets</div>
+      <div><span style="color:#b06ae0;font-weight:bold">👻 GHOST</span> — bullets pass through you</div>
+      <div><span style="color:#ff8800;font-weight:bold">↩ RICO+</span> — bullets bounce 10 times</div>
+      <div><span style="color:#88ddff;font-weight:bold">❄ FREEZE</span> — slow all other tanks</div>
+    </div>
+    <div class="howto-grid" style="grid-template-columns:1fr">
     </div>
     <div class="section-label" style="margin-bottom:12px">Default Controls</div>
     <div class="ctrl-list">
@@ -198,7 +217,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
       <div class="ctrl-row-h"><span class="pchip" style="background:var(--p1);color:#fff">P2</span> ↑/↓ move · ←/→ rotate · Enter fire</div>
       <div class="ctrl-row-h"><span class="pchip" style="background:var(--p2);color:#000">P3</span> T/G move · F/H rotate · R fire</div>
       <div class="ctrl-row-h"><span class="pchip" style="background:var(--p3);color:#fff">P4</span> I/K move · J/L rotate · U fire</div>
-    </div>
+    </div></div>
     <div class="btn-row"><button class="btn btn-dim" id="btn-howto-back">Back</button></div>
   </div>
 </div>
@@ -351,10 +370,15 @@ const C = Object.freeze({
   SNAP_INTERVAL: 3,     // send snapshot every N ticks (60/20=3)
   MAX_PLAYERS: 8,
   // World
-  CELL: 52,             // px per maze cell
-  COLS: 19,             // must be odd
-  ROWS: 13,             // must be odd
+  CELL: 64,             // px per maze cell (bigger = more open feel)
+  COLS: 21,             // must be odd
+  ROWS: 15,             // must be odd
   WALL_T: 4,            // wall render thickness (visual only, collision uses cell AABB)
+  // Powerups
+  PU_SPAWN_INTERVAL: 8,  // seconds between powerup spawns
+  PU_RADIUS: 14,         // pickup collision radius
+  PU_DURATION: 8,        // seconds powerup lasts
+  PU_MAX: 5,             // max simultaneous powerups on map
   // Tank
   T_RADIUS: 13,
   T_SPEED: 110,         // px/s
@@ -446,17 +470,18 @@ class RNG {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SECTION 4 — MAZE GENERATOR (Iterative DFS / Recursive Backtracker)
-// Returns wall segments as AABBs for collision + open cells for rendering
+// SECTION 4 — MAZE GENERATOR
+// Hybrid approach: DFS skeleton + aggressive wall removal for open feel.
+// After generating a perfect maze we knock out extra walls to create
+// larger rooms, loops, and wide corridors. Much more playable than
+// a pure perfect maze (which produces only narrow single-width corridors).
 // ═══════════════════════════════════════════════════════════════
 class Maze {
   static generate(rng, cols=C.COLS, rows=C.ROWS, cell=C.CELL) {
-    // grid[r][c] = 1 if passage, 0 if wall
     const grid = Array.from({length:rows}, () => new Uint8Array(cols));
-    const idx = (c,r) => r*cols+c;
     const W = cols*cell, H = rows*cell;
 
-    // Carve starting from (1,1)
+    // Step 1: DFS perfect maze skeleton
     grid[1][1] = 1;
     const stack = [{c:1,r:1}];
     const dirs4 = [{dc:2,dr:0},{dc:-2,dr:0},{dc:0,dr:2},{dc:0,dr:-2}];
@@ -476,32 +501,70 @@ class Maze {
       }
       if (!advanced) stack.pop();
     }
-    // Border always wall
+
+    // Step 2: Knock out ~55% of interior walls to create open areas.
+    // We only remove even-row/col cells (the wall cells between rooms).
+    // This creates loops, wide corridors and open plazas.
+    const wallCells = [];
+    for (let r=1;r<rows-1;r++) {
+      for (let c=1;c<cols-1;c++) {
+        if (!grid[r][c]) wallCells.push({r,c});
+      }
+    }
+    rng.shuffle(wallCells);
+    const removeCount = Math.floor(wallCells.length * 0.55);
+    for (let i=0;i<removeCount;i++) {
+      const {r,c} = wallCells[i];
+      // Only remove if it doesn't isolate a cell (keep border intact)
+      if (r>0&&r<rows-1&&c>0&&c<cols-1) grid[r][c] = 1;
+    }
+
+    // Step 3: Create 2–4 large open rooms by clearing 3×3 blocks
+    const numRooms = rng.int(2,4);
+    for (let room=0;room<numRooms;room++) {
+      const rc = rng.int(2, rows-4);
+      const cc = rng.int(2, cols-4);
+      for (let dr=0;dr<3;dr++)
+        for (let dc=0;dc<3;dc++)
+          if (rc+dr>0&&rc+dr<rows-1&&cc+dc>0&&cc+dc<cols-1)
+            grid[rc+dr][cc+dc] = 1;
+    }
+
+    // Step 4: Restore hard border walls
     for(let c=0;c<cols;c++){grid[0][c]=0;grid[rows-1][c]=0;}
     for(let r=0;r<rows;r++){grid[r][0]=0;grid[r][cols-1]=0;}
 
     // Build AABB wall list
     const walls = [];
-    for (let r=0; r<rows; r++) {
-      for (let c=0; c<cols; c++) {
+    for (let r=0;r<rows;r++)
+      for (let c=0;c<cols;c++)
         if (!grid[r][c]) walls.push({x:c*cell, y:r*cell, w:cell, h:cell});
-      }
-    }
 
     // Open cells for rendering
     const open = [];
-    for (let r=0; r<rows; r++)
-      for (let c=0; c<cols; c++)
+    for (let r=0;r<rows;r++)
+      for (let c=0;c<cols;c++)
         if (grid[r][c]) open.push({x:c*cell, y:r*cell, w:cell, h:cell});
 
-    // Spawn points: collect all open passage cells (grid coords odd,odd = chamber centers)
+    // Spawn points: all open cells, shuffled
     const spawns = [];
     for (let r=1;r<rows-1;r+=2)
       for (let c=1;c<cols-1;c+=2)
         if (grid[r][c]) spawns.push({x:c*cell+cell/2, y:r*cell+cell/2});
+    // Also add some even-coord open cells for more spawn variety
+    for (let r=2;r<rows-2;r+=3)
+      for (let c=2;c<cols-2;c+=3)
+        if (grid[r][c]) spawns.push({x:c*cell+cell/2, y:r*cell+cell/2});
     rng.shuffle(spawns);
 
-    return {cols, rows, cell, W, H, walls, open, spawns, grid};
+    // Powerup spawn locations: open cells away from borders
+    const puSpawns = [];
+    for (let r=2;r<rows-2;r++)
+      for (let c=2;c<cols-2;c++)
+        if (grid[r][c]) puSpawns.push({x:c*cell+cell/2, y:r*cell+cell/2});
+    rng.shuffle(puSpawns);
+
+    return {cols, rows, cell, W, H, walls, open, spawns, puSpawns, grid};
   }
 }
 
@@ -621,13 +684,71 @@ const Physics = {
     return {...b, x, y, vx, vy, bounces};
   },
 
-  // Simple circle-circle bullet/tank overlap
+  // Simple circle-circle bullet/tank overlap (big bullets have 2.5x radius)
   bulletTank(b, t) {
     if(t.dead) return false;
     const dx=b.x-t.x, dy=b.y-t.y;
-    return dx*dx+dy*dy < (C.B_RADIUS+C.T_RADIUS)**2;
+    const br = b.big ? C.B_RADIUS*2.5 : C.B_RADIUS;
+    return dx*dx+dy*dy < (br+C.T_RADIUS)**2;
   },
 };
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 6.5 — POWERUP DEFINITIONS
+// Each powerup type: id, label, color, icon char, duration,
+// and effect applied in simulation tick.
+//
+// Offensive: TRIPLE_SHOT, FAST_FIRE, LASER, MINE
+// Defensive: SPEED_BOOST, SHIELD, GHOST, RICOCHET+
+// ═══════════════════════════════════════════════════════════════
+const POWERUP_TYPES = [
+  // ── Offensive ──
+  {
+    id: 'TRIPLE_SHOT', label: 'TRIPLE', color: '#ff6b35', icon: '⚡',
+    desc: 'Fires 3 bullets in a spread',
+    apply(tank) { tank.pu_tripleShot = C.PU_DURATION; },
+  },
+  {
+    id: 'FAST_FIRE', label: 'RAPID', color: '#ff3366', icon: '🔥',
+    desc: 'Fire rate tripled',
+    apply(tank) { tank.pu_fastFire = C.PU_DURATION; },
+  },
+  {
+    id: 'BIG_BULLET', label: 'HEAVY', color: '#e84393', icon: '💥',
+    desc: 'Giant bullets, instant kill',
+    apply(tank) { tank.pu_bigBullet = C.PU_DURATION; },
+  },
+  {
+    id: 'EXTRA_BOUNCE', label: 'RICO+', color: '#ff8800', icon: '↩',
+    desc: 'Bullets bounce 10 times',
+    apply(tank) { tank.pu_extraBounce = C.PU_DURATION; },
+  },
+  // ── Defensive ──
+  {
+    id: 'SPEED', label: 'SPEED', color: '#42c8ff', icon: '▶▶',
+    desc: 'Move 2× faster',
+    apply(tank) { tank.pu_speed = C.PU_DURATION; },
+  },
+  {
+    id: 'SHIELD', label: 'SHIELD', color: '#42c87a', icon: '🛡',
+    desc: 'Absorbs one bullet hit',
+    apply(tank) { tank.pu_shield = 1; },  // shield charge count
+  },
+  {
+    id: 'GHOST', label: 'GHOST', color: '#b06ae0', icon: '👻',
+    desc: 'Bullets pass through you',
+    apply(tank) { tank.pu_ghost = C.PU_DURATION; },
+  },
+  {
+    id: 'FREEZE', label: 'FREEZE', color: '#88ddff', icon: '❄',
+    desc: 'All other tanks briefly slowed',
+    apply(tank, allTanks) {
+      for (const t of allTanks) {
+        if (t.id !== tank.id && !t.dead) t.pu_frozen = 2.5;
+      }
+    },
+  },
+];
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION 7 — SIMULATION
@@ -636,8 +757,9 @@ const Physics = {
 //
 // State:
 //   tick: number
-//   tanks: [{id,name,color,x,y,angle,dead,kills,fireCd}]
-//   bullets: [{id,ownerId,x,y,vx,vy,bounces,maxB,life}]
+//   tanks: [{id,name,color,x,y,angle,dead,kills,fireCd, pu_*}]
+//   bullets: [{id,ownerId,x,y,vx,vy,bounces,maxB,life,big}]
+//   powerups: [{id,type,x,y,collected}]
 //   roundOver: bool
 //   winnerId: string|null
 // ═══════════════════════════════════════════════════════════════
@@ -651,6 +773,8 @@ class Simulation {
   init(players, maze) {
     this.maze = maze;
     this._bid = 0;
+    this._puid = 0;
+    this._puTimer = 0; // accumulates seconds until next powerup spawn
     this.state = {
       tick: 0,
       tanks: players.map((p,i) => ({
@@ -660,8 +784,13 @@ class Simulation {
         y: maze.spawns[i % maze.spawns.length].y,
         angle: Math.PI * 0.25,
         dead: false, kills: 0, fireCd: 0,
+        // powerup state fields (null/0 = inactive)
+        pu_tripleShot:0, pu_fastFire:0, pu_bigBullet:0, pu_extraBounce:0,
+        pu_speed:0, pu_shield:0, pu_ghost:0, pu_frozen:0,
+        activePu: null, // current display label
       })),
       bullets: [],
+      powerups: [],  // active pickups on the map
       roundOver: false,
       winnerId: null,
     };
@@ -673,64 +802,109 @@ class Simulation {
     const s = this.state;
     const dt = 1 / C.TICK_RATE;
 
-    // 1. Apply inputs → move / fire
+    // 0. Tick powerup timers
+    this._tickPowerupTimers(s, dt);
+
+    // 1. Spawn powerups on a timer
+    this._puTimer += dt;
+    if (this._puTimer >= C.PU_SPAWN_INTERVAL && s.powerups.length < C.PU_MAX) {
+      this._puTimer = 0;
+      this._spawnPowerup(s);
+    }
+
+    // 2. Apply inputs → move / fire
     for (const t of s.tanks) {
       if (t.dead) continue;
       const inp = inputs ? (inputs.get ? inputs.get(t.id) : inputs[t.id]) : null;
       if (inp) {
-        if (inp.left)  t.angle -= C.T_ROT * dt;
-        if (inp.right) t.angle += C.T_ROT * dt;
-        if (inp.up || inp.down) {
-          const spd = inp.up ? C.T_SPEED : -C.T_SPEED;
-          t.x += Math.cos(t.angle) * spd * dt;
-          t.y += Math.sin(t.angle) * spd * dt;
+        const frozen = t.pu_frozen > 0;
+        if (!frozen) {
+          if (inp.left)  t.angle -= C.T_ROT * dt;
+          if (inp.right) t.angle += C.T_ROT * dt;
+          if (inp.up || inp.down) {
+            const speedMult = t.pu_speed > 0 ? 2.0 : 1.0;
+            const spd = inp.up ? C.T_SPEED * speedMult : -C.T_SPEED * speedMult;
+            t.x += Math.cos(t.angle) * spd * dt;
+            t.y += Math.sin(t.angle) * spd * dt;
+          }
         }
-        // Fire
-        if (inp.fire && t.fireCd <= 0) {
-          this._fireBullet(t);
-          t.fireCd = C.T_FIRE_CD;
+        // Fire (fast fire = 3x fire rate)
+        const fireCdBase = t.pu_fastFire > 0 ? C.T_FIRE_CD / 3 : C.T_FIRE_CD;
+        if (inp.fire && t.fireCd <= 0 && !frozen) {
+          if (t.pu_tripleShot > 0) {
+            this._fireBullet(t, -0.25);
+            this._fireBullet(t, 0);
+            this._fireBullet(t, 0.25);
+          } else {
+            this._fireBullet(t, 0);
+          }
+          t.fireCd = fireCdBase;
         }
       }
       t.fireCd = Math.max(0, t.fireCd - dt);
     }
 
-    // 2. Resolve tank-wall collisions
+    // 3. Resolve tank-wall collisions
     for (const t of s.tanks) {
       if (t.dead) continue;
       const r = Physics.circleWalls(t.x, t.y, C.T_RADIUS, this.maze.walls);
       t.x = r.x; t.y = r.y;
     }
 
-    // 3. Resolve tank-tank
+    // 4. Resolve tank-tank
     Physics.tankTank(s.tanks);
-    // Re-resolve walls after push
     for (const t of s.tanks) {
       if (t.dead) continue;
       const r = Physics.circleWalls(t.x, t.y, C.T_RADIUS, this.maze.walls);
       t.x = r.x; t.y = r.y;
     }
 
-    // 4. Move bullets
-    const killSet = new Set();
+    // 5. Check powerup pickups
+    for (const pu of s.powerups) {
+      if (pu.collected) continue;
+      for (const t of s.tanks) {
+        if (t.dead) continue;
+        const dx = t.x - pu.x, dy = t.y - pu.y;
+        if (dx*dx + dy*dy < (C.T_RADIUS + C.PU_RADIUS)**2) {
+          pu.collected = true;
+          const puType = POWERUP_TYPES.find(p=>p.id===pu.type);
+          if (puType) {
+            puType.apply(t, s.tanks);
+            t.activePu = puType.label;
+          }
+          break;
+        }
+      }
+    }
+    s.powerups = s.powerups.filter(p=>!p.collected);
+
+    // 6. Move bullets
     const newBullets = [];
     for (const b of s.bullets) {
       b.life -= dt;
       if (b.life <= 0) continue;
       const nb = Physics.moveBullet(b, this.maze.walls, dt);
-      if (!nb) continue; // exceeded bounce limit
+      if (!nb) continue;
       Object.assign(b, nb);
 
-      // 5. Bullet-tank collision
+      // 7. Bullet-tank collision
       let hitSomething = false;
       for (const t of s.tanks) {
+        if (t.pu_ghost > 0) continue; // ghost: bullets pass through
         if (Physics.bulletTank(b, t)) {
-          t.dead = true;
-          hitSomething = true;
-          if (b.ownerId !== t.id) {
-            const shooter = s.tanks.find(tt=>tt.id===b.ownerId);
-            if (shooter && !shooter.dead) shooter.kills++;
+          // Shield absorbs one hit
+          if (t.pu_shield > 0) {
+            t.pu_shield--;
+            if (t.pu_shield <= 0) t.activePu = null;
+            hitSomething = true; // bullet is consumed
+          } else {
+            t.dead = true;
+            hitSomething = true;
+            if (b.ownerId !== t.id) {
+              const shooter = s.tanks.find(tt=>tt.id===b.ownerId);
+              if (shooter && !shooter.dead) shooter.kills++;
+            }
           }
-          killSet.add(b.id);
           break;
         }
       }
@@ -738,31 +912,78 @@ class Simulation {
     }
     s.bullets = newBullets;
 
-    // 6. Check round end
+    // 8. Check round end
     const alive = s.tanks.filter(t=>!t.dead);
     if (alive.length <= 1 && s.tanks.length > 1) {
       s.roundOver = true;
       s.winnerId = alive.length === 1 ? alive[0].id : null;
     }
-    // Edge case: only 1 player (solo practice) — never ends
-    if (s.tanks.length === 1) {
-      s.roundOver = false;
-    }
+    if (s.tanks.length === 1) s.roundOver = false;
 
     s.tick++;
   }
 
-  _fireBullet(tank) {
-    const tx = tank.x + Math.cos(tank.angle)*C.T_BARREL;
-    const ty = tank.y + Math.sin(tank.angle)*C.T_BARREL;
+  _tickPowerupTimers(s, dt) {
+    for (const t of s.tanks) {
+      if (t.pu_tripleShot > 0) { t.pu_tripleShot -= dt; if(t.pu_tripleShot<=0){t.pu_tripleShot=0;t.activePu=null;} }
+      if (t.pu_fastFire > 0)   { t.pu_fastFire -= dt;   if(t.pu_fastFire<=0){t.pu_fastFire=0;if(!t.activePu||t.activePu==='RAPID')t.activePu=null;} }
+      if (t.pu_bigBullet > 0)  { t.pu_bigBullet -= dt;  if(t.pu_bigBullet<=0){t.pu_bigBullet=0;} }
+      if (t.pu_extraBounce > 0){ t.pu_extraBounce -= dt; if(t.pu_extraBounce<=0)t.pu_extraBounce=0; }
+      if (t.pu_speed > 0)      { t.pu_speed -= dt;       if(t.pu_speed<=0){t.pu_speed=0;} }
+      if (t.pu_ghost > 0)      { t.pu_ghost -= dt;       if(t.pu_ghost<=0){t.pu_ghost=0;} }
+      if (t.pu_frozen > 0)     { t.pu_frozen -= dt;      if(t.pu_frozen<=0)t.pu_frozen=0; }
+      // Recompute activePu label (pick highest priority active one)
+      if (!t.dead) {
+        if (t.pu_tripleShot>0) t.activePu='TRIPLE';
+        else if (t.pu_fastFire>0) t.activePu='RAPID';
+        else if (t.pu_bigBullet>0) t.activePu='HEAVY';
+        else if (t.pu_extraBounce>0) t.activePu='RICO+';
+        else if (t.pu_speed>0) t.activePu='SPEED';
+        else if (t.pu_shield>0) t.activePu='SHIELD';
+        else if (t.pu_ghost>0) t.activePu='GHOST';
+        else if (t.pu_frozen>0) {} // frozen is received, show nothing
+        else t.activePu=null;
+      }
+    }
+  }
+
+  _spawnPowerup(s) {
+    if (!this.maze.puSpawns || this.maze.puSpawns.length === 0) return;
+    // Pick a random spawn point not too close to any tank
+    const candidates = this.maze.puSpawns.filter(sp => {
+      for (const t of s.tanks) {
+        if (t.dead) continue;
+        const dx=t.x-sp.x, dy=t.y-sp.y;
+        if (dx*dx+dy*dy < (C.CELL*2)**2) return false;
+      }
+      return true;
+    });
+    if (candidates.length === 0) return;
+    const sp = candidates[Math.floor(Math.random() * candidates.length)];
+    const typeIdx = Math.floor(Math.random() * POWERUP_TYPES.length);
+    s.powerups.push({
+      id: `pu${++this._puid}`,
+      type: POWERUP_TYPES[typeIdx].id,
+      x: sp.x, y: sp.y,
+      collected: false,
+    });
+  }
+
+  _fireBullet(tank, angleOffset=0) {
+    const a = tank.angle + angleOffset;
+    const tx = tank.x + Math.cos(a)*C.T_BARREL;
+    const ty = tank.y + Math.sin(a)*C.T_BARREL;
+    const big = tank.pu_bigBullet > 0;
+    const maxB = tank.pu_extraBounce > 0 ? 10 : C.B_BOUNCES;
     this.state.bullets.push({
       id: `b${++this._bid}`,
       ownerId: tank.id,
       x: tx, y: ty,
-      vx: Math.cos(tank.angle)*C.B_SPEED,
-      vy: Math.sin(tank.angle)*C.B_SPEED,
-      bounces: 0, maxB: C.B_BOUNCES,
+      vx: Math.cos(a)*C.B_SPEED,
+      vy: Math.sin(a)*C.B_SPEED,
+      bounces: 0, maxB,
       life: C.B_LIFE,
+      big, // big bullets have larger collision radius
     });
   }
 
@@ -773,12 +994,18 @@ class Simulation {
       tanks: s.tanks.map(t=>({
         id:t.id,x:t.x,y:t.y,angle:t.angle,
         dead:t.dead,kills:t.kills,fireCd:t.fireCd,
+        pu_tripleShot:t.pu_tripleShot||0, pu_fastFire:t.pu_fastFire||0,
+        pu_bigBullet:t.pu_bigBullet||0, pu_extraBounce:t.pu_extraBounce||0,
+        pu_speed:t.pu_speed||0, pu_shield:t.pu_shield||0,
+        pu_ghost:t.pu_ghost||0, pu_frozen:t.pu_frozen||0,
+        activePu:t.activePu||null,
       })),
       bullets: s.bullets.map(b=>({
         id:b.id,ownerId:b.ownerId,
         x:b.x,y:b.y,vx:b.vx,vy:b.vy,
-        bounces:b.bounces,maxB:b.maxB,life:b.life,
+        bounces:b.bounces,maxB:b.maxB,life:b.life,big:b.big||false,
       })),
+      powerups: s.powerups.map(p=>({id:p.id,type:p.type,x:p.x,y:p.y})),
       roundOver: s.roundOver,
       winnerId: s.winnerId,
     };
@@ -792,9 +1019,10 @@ class Simulation {
     s.winnerId = snap.winnerId;
     for (const st of snap.tanks) {
       const t = s.tanks.find(tt=>tt.id===st.id);
-      if (t) Object.assign(t,{x:st.x,y:st.y,angle:st.angle,dead:st.dead,kills:st.kills,fireCd:st.fireCd});
+      if (t) Object.assign(t, st);
     }
     s.bullets = snap.bullets.map(b=>({...b}));
+    s.powerups = (snap.powerups||[]).map(p=>({...p, collected:false}));
   }
 }
 
@@ -1535,14 +1763,16 @@ class Renderer {
     this._canvas = canvas;
     this._ctx = canvas.getContext('2d');
     this._particles = new Particles();
-    this._prevTanks = null;   // for interpolation
+    this._prevTanks = null;
     this._renderLoop = null;
     this._fpsFrames = 0;
     this._fpsLast = Utils.now();
     this._fps = 0;
     this._onFps = null;
-    this._deadEffect = new Map(); // id → deathTime
-    this._flashMap = new Map();   // id → {until, color}
+    this._onPowerup = null;   // callback(label) when player picks up powerup
+    this._lastPuLabel = null;
+    this._deadEffect = new Map();
+    this._flashMap = new Map();
   }
 
   start(getSim, getMaze, getPlayers, getMyId) {
@@ -1635,35 +1865,48 @@ class Renderer {
       ctx.stroke();
     }
 
-    // Bullets
+    // Powerups
     const s = sim.state;
+    const now = Utils.now();
+    for (const pu of (s.powerups||[])) {
+      this._drawPowerup(ctx, pu, now, camX, camY);
+    }
+
+    // Bullets
     for (const b of s.bullets) {
       const owner = s.tanks.find(t=>t.id===b.ownerId);
       const col = owner ? owner.color : '#fff';
-      // Trail
+      const br = b.big ? C.B_RADIUS * 2.5 : C.B_RADIUS;
       this._particles.bulletTrail(b.x, b.y, col);
-      // Glow
       ctx.save();
       ctx.shadowColor = col;
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = '#fff';
+      ctx.shadowBlur = b.big ? 18 : 8;
+      ctx.fillStyle = b.big ? col : '#fff';
       ctx.beginPath();
-      ctx.arc(b.x - camX, b.y - camY, C.B_RADIUS, 0, Math.PI*2);
+      ctx.arc(b.x - camX, b.y - camY, br, 0, Math.PI*2);
       ctx.fill();
       ctx.restore();
-      // Inner dot
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(b.x - camX, b.y - camY, C.B_RADIUS * 0.6, 0, Math.PI*2);
-      ctx.fill();
+      if (!b.big) {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(b.x - camX, b.y - camY, br * 0.6, 0, Math.PI*2);
+        ctx.fill();
+      }
     }
 
     // Tanks
     const myId = this._getMyId?.();
+    // Check for powerup pickup for local player feedback
+    if (this._onPowerup && myId) {
+      const myTank = s.tanks.find(t=>t.id===myId);
+      const curPu = myTank?.activePu || null;
+      if (curPu !== this._lastPuLabel) {
+        this._lastPuLabel = curPu;
+        if (curPu) this._onPowerup(curPu);
+      }
+    }
     for (const t of s.tanks) {
       this._drawTank(ctx, t, t.id === myId, camX, camY);
-
-      // Death flash
       if (t.dead) {
         const de = this._deadEffect.get(t.id);
         if (!de) {
@@ -1680,12 +1923,66 @@ class Renderer {
     ctx.restore();
   }
 
+  _drawPowerup(ctx, pu, now, camX, camY) {
+    const puType = POWERUP_TYPES.find(p=>p.id===pu.type);
+    if (!puType) return;
+    const x = pu.x - camX, y = pu.y - camY;
+    const r = C.PU_RADIUS;
+    const pulse = 0.85 + 0.15 * Math.sin(now * 0.004);
+    const pr = r * pulse;
+
+    ctx.save();
+    // Outer glow ring
+    ctx.shadowColor = puType.color;
+    ctx.shadowBlur = 16;
+    ctx.strokeStyle = puType.color;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(x, y, pr + 3, 0, Math.PI*2);
+    ctx.stroke();
+
+    // Inner fill
+    ctx.shadowBlur = 0;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, pr);
+    grad.addColorStop(0, '#fff');
+    grad.addColorStop(0.4, puType.color + 'cc');
+    grad.addColorStop(1, puType.color + '44');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, pr, 0, Math.PI*2);
+    ctx.fill();
+
+    // Icon text
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${r * 0.75}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(puType.label, x, y);
+    ctx.textBaseline = 'alphabetic';
+
+    // Rotating ring segments
+    const seg = 6;
+    ctx.strokeStyle = puType.color + '88';
+    ctx.lineWidth = 1.5;
+    for (let i=0;i<seg;i++) {
+      const a = (now*0.002) + (i/seg)*Math.PI*2;
+      ctx.beginPath();
+      ctx.arc(x, y, pr+7, a, a+0.35);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   _drawTank(ctx, t, isMe, camX, camY) {
     if (t.dead) return;
     const x = t.x - camX, y = t.y - camY;
     const r = C.T_RADIUS, a = t.angle;
 
+    // Ghost tanks are semi-transparent
+    const isGhost = t.pu_ghost > 0;
+
     ctx.save();
+    if (isGhost) ctx.globalAlpha = 0.45;
     ctx.translate(x, y);
 
     // Shadow
@@ -1759,7 +2056,32 @@ class Renderer {
     ctx.fillStyle = isMe ? '#fff' : t.color;
     ctx.fillText(t.name?.slice(0,8)||'', 0, -r*1.6);
 
+    // Active powerup badge
+    if (t.activePu) {
+      const puType = POWERUP_TYPES.find(p=>p.label===t.activePu);
+      const badgeCol = puType ? puType.color : '#fff';
+      ctx.font = `bold ${r*0.62}px monospace`;
+      const bw = ctx.measureText(t.activePu).width + 6;
+      ctx.fillStyle = badgeCol + 'cc';
+      ctx.fillRect(-bw/2, -r*2.5 - r*0.5, bw, r*0.72);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(t.activePu, 0, -r*2.5);
+    }
+
+    // Shield visual ring (drawn before ctx.restore so it's in local coords)
+    if (t.pu_shield > 0) {
+      ctx.strokeStyle = '#42c87a';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#42c87a';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.4, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
     ctx.restore();
+
   }
 
   _lerpColor(hex1, hex2, t) {
@@ -2055,6 +2377,12 @@ const App = (() => {
         updateHudScores();
         renderer.stop();
         renderer._deadEffect = new Map();
+        renderer._lastPuLabel = null;
+        renderer._onPowerup = (label) => {
+          const t = sim?.state?.tanks?.find(t=>t.id===myId);
+          const puType = t ? POWERUP_TYPES.find(p=>p.label===label) : null;
+          showPuToast(label, puType?.color||'#fff');
+        };
         renderer.start(
           () => sim, () => maze, () => players, () => myId
         );
@@ -2131,6 +2459,12 @@ const App = (() => {
         updateHudScores();
         renderer.stop();
         renderer._deadEffect = new Map();
+        renderer._lastPuLabel = null;
+        renderer._onPowerup = (label) => {
+          const t = sim?.state?.tanks?.find(t=>t.id===myId);
+          const puType = t ? POWERUP_TYPES.find(p=>p.label===label) : null;
+          showPuToast(label, puType?.color||'#fff');
+        };
         renderer.start(() => sim, () => maze, () => players, () => myId);
         break;
       case 'round_end':
@@ -2195,12 +2529,19 @@ const App = (() => {
         updateHudScores();
         renderer.stop();
         renderer._deadEffect = new Map();
+        renderer._lastPuLabel = null;
+        renderer._onPowerup = (label) => {
+          const t = sim?.state?.tanks?.find(t=>t.id===myId);
+          const puType = t ? POWERUP_TYPES.find(p=>p.label===label) : null;
+          showPuToast(label, puType?.color||'#fff');
+        };
         renderer.start(() => sim, () => maze, () => players, () => myId);
         break;
       case 'snapshot':
         ping = data.ping;
         $('hud-ping').textContent = ping >= 0 ? `PING: ${Math.round(ping)}ms` : 'PING: —';
         updateHudScores();
+        checkMyPowerup(data.snap);
         break;
       case 'round_end':
         scores = data.scores||[];
@@ -2326,6 +2667,32 @@ const App = (() => {
   }
 
   // ── Game ──────────────────────────────────────────────────────
+  let _lastPu = null;
+  function checkMyPowerup(snap) {
+    if (!snap || !myId) return;
+    const t = snap.tanks?.find(tt=>tt.id===myId);
+    if (!t) return;
+    if (t.activePu !== _lastPu) {
+      _lastPu = t.activePu;
+      if (t.activePu) {
+        const puType = POWERUP_TYPES.find(p=>p.label===t.activePu);
+        showPuToast(t.activePu, puType?.color||'#fff');
+      }
+    }
+  }
+
+  function showPuToast(label, color) {
+    const el = document.getElementById('pu-toast');
+    if (!el) return;
+    el.textContent = '+ ' + label;
+    el.style.color = color;
+    el.style.borderColor = color;
+    el.style.background = color + '22';
+    el.classList.add('show');
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
   function updateHudScores() {
     const hud = $('hud-scores');
     if (!players.length) return;
